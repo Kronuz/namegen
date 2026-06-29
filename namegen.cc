@@ -126,7 +126,12 @@ const std::unordered_map<std::string, const std::vector<std::string>>& Generator
 }
 
 
-#ifdef HAVE_CXX14
+// Use std::make_unique when the compiler provides it (C++14 and later), detected
+// via __cplusplus as well as the explicit HAVE_CXX14. Relying on HAVE_CXX14 alone
+// is a footgun on a C++14+ build that does not define it: the unqualified
+// make_unique calls below find std::make_unique by ADL on their std:: arguments,
+// which then clashes with the C++11 fallback ("call to 'make_unique' is ambiguous").
+#if defined(HAVE_CXX14) || __cplusplus >= 201402L
 using std::make_unique;
 #else
 // make_unique is not available in c++11, so we use this template function
