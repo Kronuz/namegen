@@ -194,10 +194,10 @@ public:
 
 	virtual ~Generator() = default;
 
-	virtual size_t combinations();
-	virtual size_t min();
-	virtual size_t max();
-	virtual std::string toString();
+	virtual size_t combinations() const;
+	virtual size_t min() const;
+	virtual size_t max() const;
+	virtual std::string toString() const;
 
 	void add(std::unique_ptr<Generator>&& g);
 };
@@ -209,10 +209,10 @@ public:
 	Random();
 	Random(std::vector<std::unique_ptr<Generator>>&& generators_);
 
-	size_t combinations();
-	size_t min();
-	size_t max();
-	std::string toString();
+	size_t combinations() const override;
+	size_t min() const override;
+	size_t max() const override;
+	std::string toString() const override;
 };
 
 
@@ -231,10 +231,10 @@ class Literal : public Generator
 public:
 	Literal(const std::string& value_);
 
-	size_t combinations();
-	size_t min();
-	size_t max();
-	std::string toString();
+	size_t combinations() const override;
+	size_t min() const override;
+	size_t max() const override;
+	std::string toString() const override;
 };
 
 
@@ -242,7 +242,7 @@ class Reverser : public Generator {
 public:
 	Reverser(std::unique_ptr<Generator>&& g);
 
-	std::string toString();
+	std::string toString() const override;
 };
 
 
@@ -251,7 +251,7 @@ class Capitalizer : public Generator
 public:
 	Capitalizer(std::unique_ptr<Generator>&& g);
 
-	std::string toString();
+	std::string toString() const override;
 };
 
 
@@ -260,7 +260,7 @@ class Collapser : public Generator
 public:
 	Collapser(std::unique_ptr<Generator>&& g);
 
-	std::string toString();
+	std::string toString() const override;
 };
 
 }

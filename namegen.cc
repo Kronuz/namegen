@@ -155,7 +155,7 @@ Generator::Generator(std::vector<std::unique_ptr<Generator>>&& generators_) :
 }
 
 
-size_t Generator::combinations()
+size_t Generator::combinations() const
 {
 	size_t total = 1;
 	for (auto& g : generators) {
@@ -165,7 +165,7 @@ size_t Generator::combinations()
 }
 
 
-size_t Generator::min()
+size_t Generator::min() const
 {
 	size_t final = 0;
 	for (auto& g : generators) {
@@ -175,7 +175,7 @@ size_t Generator::min()
 }
 
 
-size_t Generator::max()
+size_t Generator::max() const
 {
 	size_t final = 0;
 	for (auto& g : generators) {
@@ -185,7 +185,7 @@ size_t Generator::max()
 }
 
 
-std::string Generator::toString() {
+std::string Generator::toString() const {
 	std::string str;
 	for (auto& g : generators) {
 		str.append(g->toString());
@@ -209,7 +209,7 @@ Random::Random(std::vector<std::unique_ptr<Generator>>&& generators_) :
 {
 }
 
-size_t Random::combinations()
+size_t Random::combinations() const
 {
 	size_t total = 0;
 	for (auto& g : generators) {
@@ -218,7 +218,7 @@ size_t Random::combinations()
 	return total ? total : 1;
 }
 
-size_t Random::min()
+size_t Random::min() const
 {
 	size_t final = -1;
 	for (auto& g : generators) {
@@ -230,7 +230,7 @@ size_t Random::min()
 	return final;
 }
 
-size_t Random::max()
+size_t Random::max() const
 {
 	size_t final = 0;
 	for (auto& g : generators) {
@@ -243,7 +243,7 @@ size_t Random::max()
 }
 
 
-std::string Random::toString()
+std::string Random::toString() const
 {
 	if (!generators.size()) {
 		return "";
@@ -268,22 +268,22 @@ Literal::Literal(const std::string &value_) :
 {
 }
 
-size_t Literal::combinations()
+size_t Literal::combinations() const
 {
 	return 1;
 }
 
-size_t Literal::min()
+size_t Literal::min() const
 {
 	return value.size();
 }
 
-size_t Literal::max()
+size_t Literal::max() const
 {
 	return value.size();
 }
 
-std::string Literal::toString()
+std::string Literal::toString() const
 {
 	return value;
 }
@@ -294,7 +294,7 @@ Reverser::Reverser(std::unique_ptr<Generator>&& g)
 }
 
 
-std::string Reverser::toString()
+std::string Reverser::toString() const
 {
 	std::wstring str = towstring(Generator::toString());
 	std::reverse(str.begin(), str.end());
@@ -306,7 +306,7 @@ Capitalizer::Capitalizer(std::unique_ptr<Generator>&& g)
 	add(std::move(g));
 }
 
-std::string Capitalizer::toString()
+std::string Capitalizer::toString() const
 {
 	std::wstring str = towstring(Generator::toString());
 	str[0] = std::towupper(str[0]);
@@ -319,7 +319,7 @@ Collapser::Collapser(std::unique_ptr<Generator>&& g)
 	add(std::move(g));
 }
 
-std::string Collapser::toString()
+std::string Collapser::toString() const
 {
 	std::wstring str = towstring(Generator::toString());
 	std::wstring out;
