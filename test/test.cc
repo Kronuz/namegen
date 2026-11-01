@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <map>
+#include <random>
 #include <memory>
 #include <set>
 #include <stdexcept>
@@ -67,6 +69,26 @@ int main() {
 	for (auto& n : names("s", 5000)) {
 		auto& s = symbols.at("s");
 		CHECK(std::find(s.begin(), s.end(), n) != s.end());
+	}
+
+	// Every alternative of a choice, and every entry of a symbol, is equally likely.
+	{
+		std::mt19937 engine(7);
+		Generator choice("(a|b|c|d|f)");
+		Generator vowel("v");
+		std::map<std::string, int> seen;
+		const int draws = 60000;
+		for (int i = 0; i < draws; ++i) {
+			++seen[choice.generate(engine)];
+			++seen[vowel.generate(engine)];
+		}
+		CHECK(seen.size() == 5 + 6 - 1);  // "a" is a choice and a vowel
+		for (const char* n : {"b", "c", "d", "f"}) {
+			CHECK(seen[n] > draws / 5 * 95 / 100 && seen[n] < draws / 5 * 105 / 100);
+		}
+		for (const char* n : {"e", "i", "o", "u", "y"}) {
+			CHECK(seen[n] > draws / 6 * 95 / 100 && seen[n] < draws / 6 * 105 / 100);
+		}
 	}
 
 	// Collapsing runs of three: one of a, h, i, j, q, u, v, w, x, y; two of anything else.

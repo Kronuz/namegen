@@ -23,7 +23,7 @@
 namespace check {
 
 // The library's mapping from a draw to an alternative.
-constexpr ref::Pick library_pick = ref::Pick::legacy;
+constexpr ref::Pick library_pick = ref::Pick::uniform;
 
 struct Stats {
 	unsigned long patterns = 0, invalid = 0, names = 0, same_as_old = 0, differ_from_old = 0, reference = 0;

@@ -226,19 +226,18 @@ std::unique_ptr<T> make_unique(Args&&... args)
 #endif
 
 
-// A choice among n alternatives, from two engine outputs. It is the choice the original
-// made with std::uniform_real_distribution<double>(0, n - 1): u = (x1 + x2 * 2^32) / 2^64
-// from two 32-bit outputs, as generate_canonical computes it in libc++, libstdc++ and the
-// MSVC STL, scaled by n - 1 in the distribution's expression, rounded to the nearest
-// integer. Computing u here skips libstdc++'s run-time logarithms.
-static size_t choose(std::mt19937& e, size_t n)
+// A choice among n alternatives, each with probability 1/n, from two outputs of the
+// engine: u = (x1 + x2 * 2^32) / 2^64, the value std::generate_canonical<double> takes
+// from a 32-bit engine in libc++, libstdc++ and the MSVC STL, then floor(u * n). The sum
+// can round up to 2^64, so u can be 1.0; that draw takes the last alternative.
+template <typename Engine>
+static size_t choose(Engine& e, size_t n)
 {
 	double low = static_cast<double>(e());
 	double high = static_cast<double>(e());
 	double u = (low + high * 4294967296.0) / 18446744073709551616.0;
-	double scaled = u * static_cast<double>(n - 1) + 0.0;
-	int rnd = scaled + 0.5;
-	return static_cast<size_t>(rnd);
+	size_t i = static_cast<size_t>(u * static_cast<double>(n));
+	return i < n ? i : n - 1;
 }
 
 

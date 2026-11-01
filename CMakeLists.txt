@@ -36,6 +36,12 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   target_link_libraries(namegen_diff_test PRIVATE namegen)
   add_test(NAME namegen_diff COMMAND namegen_diff_test)
 
+  # The choice among alternatives against its oracle (uniform), with a stub engine;
+  # it compiles namegen.cc itself rather than linking the library.
+  add_executable(namegen_choose_test test/choose_test.cc)
+  target_compile_features(namegen_choose_test PRIVATE cxx_std_14)
+  add_test(NAME namegen_choose COMMAND namegen_choose_test)
+
   # One generator shared by eight threads (run under ThreadSanitizer in CI), and
   # seeded engines.
   find_package(Threads REQUIRED)

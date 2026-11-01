@@ -27,12 +27,13 @@ MUTANTS = [
     ("a run outlives a split", "\tset.push_back(make_unique<Sequence>());\n\trun = nullptr;\n}", "\tset.push_back(make_unique<Sequence>());\n}"),
     ("a skipped draw takes one output", "e.discard(2 * static_cast<unsigned long long>(draws));", "e.discard(static_cast<unsigned long long>(draws));"),
     ("a draw drops its high half", "double u = (low + high * 4294967296.0) / 18446744073709551616.0;", "double u = (low + high * 4294967296.0 * 0) / 4294967296.0;"),
-    ("choose() scales by n", "double scaled = u * static_cast<double>(n - 1) + 0.0;", "double scaled = u * static_cast<double>(n) + 0.0;"),
+    ("choose() scales by n - 1", "size_t i = static_cast<size_t>(u * static_cast<double>(n));", "size_t i = static_cast<size_t>(u * static_cast<double>(n - 1) + 0.5);"),
+    ("choose() takes u = 1.0 past the end", "return i < n ? i : n - 1;", "return i;"),
     ("combinations() wraps", "return a != 0 && b > static_cast<size_t>(-1) / a ? static_cast<size_t>(-1) : a * b;", "return a * b;"),
     ("one engine for every thread", "thread_local std::mt19937 rng(", "static std::mt19937 rng(", "tsan"),
 ]
 
-TESTS = ["namegen_test", "namegen_diff_test", "namegen_fuzz", "namegen_thread_test"]
+TESTS = ["namegen_test", "namegen_choose_test", "namegen_diff_test", "namegen_fuzz", "namegen_thread_test"]
 
 
 def run_tests(build):
@@ -71,6 +72,7 @@ def main():
                 survivors.append(name)
     finally:
         SOURCE.write_text(original)
+        subprocess.run(["cmake", "--build", build, "-j4", "--target"] + TESTS, capture_output=True)
     if survivors:
         print(f"{len(survivors)} mutants survived")
         sys.exit(1)
