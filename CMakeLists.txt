@@ -1,21 +1,40 @@
 cmake_minimum_required(VERSION 3.14)
-project(fantasyname LANGUAGES CXX)
+project(namegen LANGUAGES CXX)
 
-# This is skeeto's fantasy name generator (https://github.com/skeeto/fantasyname),
-# a multi-language repo. This CMakeLists builds only the C++ implementation under
-# c++/, so the library can be consumed via FetchContent. namegen.cc compiles into a
-# small static library; consumers get c++/ on their include path for "namegen.h".
-# cxx_std_14 is requested so the C++14 std::make_unique path is taken (see namegen.cc).
-add_library(fantasyname STATIC c++/namegen.cc)
-target_include_directories(fantasyname PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/c++")
-target_compile_features(fantasyname PUBLIC cxx_std_14)
-# Namespaced alias so consumers link `fantasyname::fantasyname` whether they add
-# this via FetchContent or add_subdirectory.
-add_library(fantasyname::fantasyname ALIAS fantasyname)
+# --- Library target ---
+# The C++ fantasy name generator: namegen.cc compiles into a small static library and
+# consumers get the repository root on their include path for "namegen.h". No
+# dependencies beyond the standard library. cxx_std_14 is what the code needs
+# (std::make_unique; it also builds as C++11 through its own fallback).
+add_library(namegen STATIC namegen.cc)
+target_include_directories(namegen PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_compile_features(namegen PUBLIC cxx_std_14)
 
-# Only build the example when this repo is the top-level project, so consumers
-# (e.g. via FetchContent) don't build it.
+# Alias so consumers link `namegen::namegen` whether they add this via
+# add_subdirectory or FetchContent.
+add_library(namegen::namegen ALIAS namegen)
+# The target names of the Kronuz/fantasyname fork's CMakeLists, for consumers that
+# move from the fork to this repository.
+add_library(fantasyname ALIAS namegen)
+add_library(fantasyname::fantasyname ALIAS namegen)
+
+option(NAMEGEN_BUILD_BENCH "Build the benchmark (fetches the C port as a comparator)" OFF)
+option(NAMEGEN_FUZZ "Build the libFuzzer target (Clang)" OFF)
+
+# Only build the tests, demo and benchmark when this repo is the top-level project,
+# so consumers (e.g. via FetchContent) don't build them.
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-  add_executable(fantasyname_example c++/example.cc)
-  target_link_libraries(fantasyname_example PRIVATE fantasyname)
+  enable_testing()
+
+  # The tests use assert(); keep it live in every build type.
+  set(NAMEGEN_TEST_FLAGS -UNDEBUG)
+
+  add_executable(namegen_test test/test.cc)
+  target_link_libraries(namegen_test PRIVATE namegen)
+  target_compile_options(namegen_test PRIVATE ${NAMEGEN_TEST_FLAGS})
+  add_test(NAME namegen COMMAND namegen_test)
+
+  # A runnable tour of the library (not a test): ./build/namegen_demo [pattern [n]]
+  add_executable(namegen_demo examples/demo.cc)
+  target_link_libraries(namegen_demo PRIVATE namegen)
 endif()

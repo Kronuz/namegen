@@ -1,0 +1,137 @@
+// Smoke test: the pattern syntax, the generator tree's counts and lengths, errors.
+#include "namegen.h"
+
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <memory>
+#include <set>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+static int checks = 0;
+#define CHECK(x) do { ++checks; if (!(x)) { std::fprintf(stderr, "%s:%d: CHECK(%s) failed\n", __FILE__, __LINE__, #x); std::abort(); } } while (0)
+
+static std::string error_of(const std::string& pattern) {
+	try {
+		NameGen::Generator g(pattern);
+	} catch (const std::invalid_argument& e) {
+		return e.what();
+	}
+	return "";
+}
+
+// Every name `pattern` gives in `draws` calls.
+static std::set<std::string> names(const std::string& pattern, int draws = 2000, bool collapse = true) {
+	NameGen::Generator g(pattern, collapse);
+	std::set<std::string> seen;
+	for (int i = 0; i < draws; ++i) {
+		seen.insert(g.toString());
+	}
+	return seen;
+}
+
+int main() {
+	using NameGen::Generator;
+
+	// Literal groups, capitalization, reversal.
+	CHECK(Generator("(foo)").toString() == "foo");
+	CHECK(Generator("!(foo)").toString() == "Foo");
+	CHECK(Generator("~(foo)").toString() == "oof");
+	CHECK(Generator("!~(foo)").toString() == "Oof");
+	CHECK(Generator("~!(foo)").toString() == "ooF");
+	CHECK(Generator("(foo|foo)").toString() == "foo");
+	CHECK(Generator("(a!b~c)").toString() == "a!b~c");  // ! and ~ are literal inside ()
+	CHECK(Generator("x'y").toString() == "x'y");        // non-symbol letters are literal
+	CHECK(Generator("").toString().empty());
+	CHECK(Generator("<>").toString().empty());
+	CHECK(Generator("()").toString().empty());
+	CHECK(Generator("(|)").toString().empty());
+	CHECK(names("(foo|bar)") == (std::set<std::string>{"foo", "bar"}));
+	CHECK(names("<c|v|>").count(""));
+	CHECK(names("~<(ab)(cd)>") == (std::set<std::string>{"dcba"}));
+	CHECK(names("~(ab)(cd)") == (std::set<std::string>{"bacd"}));
+
+	// Symbols.
+	auto vowels = names("v");
+	CHECK(vowels == (std::set<std::string>{"a", "e", "i", "o", "u", "y"}));
+	for (auto& n : names("!v")) {
+		CHECK(n.size() == 1 && n[0] >= 'A' && n[0] <= 'Z');
+	}
+	const auto& symbols = Generator::SymbolMap();
+	CHECK(symbols.size() == 13);
+	for (const char* k : {"s", "S", "b", "v", "V", "c", "B", "C", "i", "m", "M", "D", "d"}) {
+		CHECK(symbols.count(k) == 1);
+	}
+	for (auto& n : names("s", 5000)) {
+		auto& s = symbols.at("s");
+		CHECK(std::find(s.begin(), s.end(), n) != s.end());
+	}
+
+	// Collapsing runs of three: one of a, h, i, j, q, u, v, w, x, y; two of anything else.
+	CHECK(Generator("(aaa)").toString() == "a");
+	CHECK(Generator("(bbbb)").toString() == "bb");
+	CHECK(Generator("(abba)").toString() == "abba");
+	CHECK(Generator("(AAA)").toString() == "AA");
+	CHECK(Generator("(aaa)", false).toString() == "aaa");
+
+	// combinations(), min(), max().
+	CHECK(Generator("v").combinations() == 6);
+	CHECK(Generator("V").combinations() == 22);
+	CHECK(Generator("sv").combinations() == symbols.at("s").size() * 6);
+	CHECK(Generator("<v|c>").combinations() == 6 + 21);
+	CHECK(Generator("(a|b|c)").combinations() == 3);
+	CHECK(Generator("(foo)").combinations() == 1);
+	CHECK(Generator("").combinations() == 1);
+	CHECK(Generator("s").min() == 2);
+	CHECK(Generator("s").max() == 4);
+	CHECK(Generator("(a|bcd)v").min() == 2);
+	CHECK(Generator("(a|bcd)v").max() == 4);
+	CHECK(Generator("").min() == 0 && Generator("").max() == 0);
+	CHECK(Generator().toString().empty() && Generator().combinations() == 1);
+
+	// Errors.
+	CHECK(error_of(")") == "Unbalanced brackets");
+	CHECK(error_of(">") == "Unbalanced brackets");
+	CHECK(error_of("(") == "Missing closing bracket");
+	CHECK(error_of("<s") == "Missing closing bracket");
+	CHECK(error_of("<)") == "Unexpected ')' in pattern");
+	CHECK(error_of("(>") == "Unexpected '>' in pattern");
+	CHECK(error_of("s(v)<c>").empty());
+
+	// The predefined patterns compile and produce names.
+	for (const char* p : {MIDDLE_EARTH, JAPANESE_NAMES_CONSTRAINED, JAPANESE_NAMES_DIVERSE, CHINESE_NAMES,
+	                      GREEK_NAMES, HAWAIIAN_NAMES_1, HAWAIIAN_NAMES_2, OLD_LATIN_PLACE_NAMES, DRAGONS_PERN,
+	                      DRAGON_RIDERS, POKEMON, FANTASY_VOWELS_R, FANTASY_S_A, FANTASY_H_L, FANTASY_N_L,
+	                      FANTASY_K_N, FANTASY_J_G_Z, FANTASY_K_J_Y, FANTASY_S_E}) {
+		Generator g(p);
+		CHECK(g.combinations() > 1);
+		for (int i = 0; i < 100; ++i) {
+			auto n = g.toString();
+			CHECK(!n.empty() && n.size() <= g.max());
+		}
+	}
+
+	// Composing a tree by hand.
+	{
+		std::vector<std::unique_ptr<Generator>> alternatives;
+		alternatives.emplace_back(new NameGen::Literal("x"));
+		alternatives.emplace_back(new NameGen::Literal("yz"));
+		NameGen::Random r(std::move(alternatives));
+		CHECK(r.combinations() == 2 && r.min() == 1 && r.max() == 2);
+		Generator root;
+		root.add(std::unique_ptr<Generator>(new NameGen::Literal("<")));
+		root.add(std::unique_ptr<Generator>(new NameGen::Capitalizer(std::unique_ptr<Generator>(new NameGen::Literal("ab")))));
+		root.add(std::unique_ptr<Generator>(new NameGen::Reverser(std::unique_ptr<Generator>(new NameGen::Literal("cd")))));
+		CHECK(root.toString() == "<Abdc");
+		CHECK(root.min() == 5 && root.max() == 5 && root.combinations() == 1);
+	}
+
+	// The wide-string helpers.
+	CHECK(towstring("abc") == L"abc");
+	CHECK(tostring(L"abc") == "abc");
+
+	std::printf("all namegen tests passed (%d checks)\n", checks);
+	return 0;
+}
