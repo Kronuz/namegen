@@ -111,19 +111,32 @@ which parses the pattern as it draws; the last column is the C port's time over 
 the C port draws from its own generator, so its names for a seed differ, and it has no `S` or
 `b` symbol, so the Xapiand row has no C port time.
 
+Apple M4 Pro, macOS 26:
+
 | pattern | namegen (ns) | one-shot (ns) | C port (ns) | × faster than the C port |
 | --- | ---: | ---: | ---: | ---: |
-| `sV'i` | 121 | 518 | 48 | 0.40 |
-| `!<b<\|\|v\|V><\|\|s\|S\|b>>` (Xapiand's node names) | 148 | 1,459 | — | — |
-| `GREEK_NAMES` | 193 | 3,282 | 188 | 0.97 |
-| `MIDDLE_EARTH` | 210 | 6,167 | 604 | 2.9 |
-| `JAPANESE_NAMES_DIVERSE` | 293 | 46,164 | 2,543 | 8.7 |
+| `sV'i` | 68 | 262 | 27 | 0.40 |
+| `!<b<\|\|v\|V><\|\|s\|S\|b>>` (Xapiand's node names) | 84 | 834 | — | — |
+| `GREEK_NAMES` | 95 | 1,800 | 103 | 1.09 |
+| `MIDDLE_EARTH` | 99 | 3,913 | 354 | 3.6 |
+| `JAPANESE_NAMES_DIVERSE` | 116 | 20,439 | 1,449 | 12.5 |
 
-AMD EPYC 7763 (Linux x86-64 VM, 8 vCPUs, shared), GCC 11.2 with libstdc++, CMake Release
-(`-O3`), the C port built by the same GCC. Compile once and draw many: drawing allocates
-nothing besides the returned string, and compiling allocates once per node (17 times for
-`sV'i`, 1,278 for `JAPANESE_NAMES_DIVERSE`). [docs/perf/](docs/perf/README.md) has every row,
-the allocations, the A/A spread and the original C++ port's numbers.
+Intel Core i9-9980HK, macOS 15 x86-64:
+
+| pattern | namegen (ns) | one-shot (ns) | C port (ns) | × faster than the C port |
+| --- | ---: | ---: | ---: | ---: |
+| `sV'i` | 130 | 786 | 55 | 0.43 |
+| `!<b<\|\|v\|V><\|\|s\|S\|b>>` (Xapiand's node names) | 142 | 2,805 | — | — |
+| `GREEK_NAMES` | 208 | 6,479 | 217 | 1.04 |
+| `MIDDLE_EARTH` | 246 | 13,129 | 849 | 3.5 |
+| `JAPANESE_NAMES_DIVERSE` | 309 | 72,427 | 2,996 | 9.7 |
+
+Apple clang 17 with libc++ on both, CMake Release (`-O3`), the C port built by the same
+clang. Compile once and draw many: drawing allocates nothing besides the returned string,
+while compiling allocates the tree (13 allocations for `sV'i`, 1,258 for
+`JAPANESE_NAMES_DIVERSE`), which makes `one-shot` 10x to 30x slower than a C port call.
+[docs/perf/](docs/perf/README.md) has every row, the allocations, the A/A spread (within 3%),
+a Linux GCC run and the original C++ port's numbers.
 
 ```sh
 cmake -B bench -DCMAKE_BUILD_TYPE=Release -DNAMEGEN_BUILD_BENCH=ON && cmake --build bench

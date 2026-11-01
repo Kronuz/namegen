@@ -28,6 +28,52 @@ cmake -B bench -DCMAKE_BUILD_TYPE=Release -DNAMEGEN_BUILD_BENCH=ON && cmake --bu
 The patterns: `sV'i`; Xapiand's node names `!<b<||v|V><||s|S|b>>`; `GREEK_NAMES`;
 `MIDDLE_EARTH`; `JAPANESE_NAMES_DIVERSE` (the largest predefined pattern, about 1,700 bytes).
 
+## Batch 3: Intel Core i9-9980HK, Apple clang 17 (2026-11-01, main 22a4634)
+
+> Status: CURRENT (2026-11-01) Intel Core i9-9980HK (8 cores, 16 threads), macOS 15.8 x86-64,
+> Apple clang 17.0.0 (clang-1700.6.4.2) with libc++, CMake Release (-O3), the C port built by
+> the same clang; one `quiet strict` hold for the build and two runs. Raw output in the
+> campaign's `perf/namegen/i9-appleclang17-run{1,2}.txt`.
+
+Run 2, ns per operation (allocations per operation in parentheses):
+
+| pattern | compile | original compile | toString | original toString | one-shot | C port |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sV'i` | 671 (13) | 16,320 (221) | 130 (0) | 448 (4.69) | 786 | 55.2 |
+| Xapiand | 2,693 (50) | 71,661 (1,187) | 142 (0) | 547 (6.19) | 2,805 | — |
+| `GREEK_NAMES` | 6,229 (112) | 45,431 (759) | 208 (0) | 499 (4.01) | 6,479 | 217 |
+| `MIDDLE_EARTH` | 13,225 (234) | 42,296 (827) | 246 (0) | 572 (4.22) | 13,129 | 849 |
+| `JAPANESE_NAMES_DIVERSE` | 72,127 (1,258) | 212,493 (3,670) | 309 (0) | 615 (3.85) | 72,427 | 2,996 |
+
+The A/A arm is within 3% of `toString` in both runs, and the toString rows of the two runs
+are within 1.3% of each other. Against the original: compiling 2.9x to 27x faster, a name
+2.0x to 3.8x faster. Against the C port: a name is 2.4x slower on `sV'i`, 1.04x faster on
+`GREEK_NAMES`, 3.5x and 9.7x faster on `MIDDLE_EARTH` and `JAPANESE_NAMES_DIVERSE`;
+`one-shot` is 14x to 30x slower than one C port call.
+
+## Batch 2: Apple M4 Pro, Apple clang 17 (2026-11-01, main 22a4634)
+
+> Status: CURRENT (2026-11-01) Apple M4 Pro (14 cores), macOS 26, Apple clang 17.0.0
+> (clang-1700.3.19.1) with libc++, CMake Release (-O3), the C port built by the same clang;
+> one `quiet strict` hold for the build and two runs. Raw output in the campaign's
+> `perf/namegen/m4-appleclang17-run{1,2}.txt`.
+
+Run 2, ns per operation (allocations per operation in parentheses):
+
+| pattern | compile | original compile | toString | original toString | one-shot | C port |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sV'i` | 199 (13) | 5,797 (221) | 67.8 (0) | 191 (4.68) | 262 | 26.9 |
+| Xapiand | 778 (50) | 18,302 (1,187) | 83.9 (0) | 240 (6.06) | 834 | — |
+| `GREEK_NAMES` | 1,730 (112) | 12,102 (759) | 95.0 (0) | 221 (4.00) | 1,800 | 103 |
+| `MIDDLE_EARTH` | 3,862 (234) | 11,669 (827) | 99.0 (0) | 224 (4.22) | 3,913 | 354 |
+| `JAPANESE_NAMES_DIVERSE` | 20,959 (1,258) | 58,457 (3,670) | 116 (0) | 242 (3.83) | 20,439 | 1,449 |
+
+The A/A arm is within 1.1% of `toString` in both runs, and every toString row of run 1 is
+within 5% of run 2. Against the original: compiling 2.8x to 29x faster, a name 2.1x to 2.9x
+faster. Against the C port: a name is 2.5x slower on `sV'i`, 1.09x faster on `GREEK_NAMES`,
+3.6x and 12.5x faster on `MIDDLE_EARTH` and `JAPANESE_NAMES_DIVERSE`; `one-shot` is 10x to
+17x slower than one C port call.
+
 ## Batch 1: Linux x86-64 VM, GCC 11.2 (2026-11-01, main c0f9393)
 
 > Status: CURRENT (2026-11-01) AMD EPYC 7763, 8 vCPUs of a shared VM (load about 5),

@@ -32,11 +32,12 @@ fork's `c++/` directory to this repository, with its history.
   original allocated more than 115 times for one `s`), joins consecutive literal characters into one node,
   and finds symbols by character instead of by exception. Names, `min()`, `max()` and
   `combinations()` are unchanged.
-- Measured with `bench/bench.cc` against the original on the same build (AMD EPYC 7763
-  Linux VM, GCC 11.2, `-O3`): compiling is 2.3x to 43x faster (`sV'i`: 9.9 µs and 225
-  allocations before, 0.40 µs and 17 after) and a name 2.2x to 3.9x faster (`sV'i`: 423 ns
-  before, 121 ns after), with no allocation besides the result.
-  [docs/perf/README.md](docs/perf/README.md) has every row.
+- Measured with `bench/bench.cc` against the original on the same build: compiling is
+  2.8x to 29x faster and a name 2.1x to 2.9x faster on an Apple M4 Pro (Apple clang 17;
+  `sV'i`: 5.8 µs and 221 allocations before, 0.20 µs and 13 after; a name 191 ns before,
+  68 ns after), 2.9x to 27x and 2.0x to 3.8x on an Intel Core i9-9980HK (Apple clang 17),
+  and 2.3x to 43x and 2.2x to 3.9x on a Linux VM (GCC 11). A name allocates nothing besides
+  the result. [docs/perf/README.md](docs/perf/README.md) has every row.
 
 ### Fixed
 
