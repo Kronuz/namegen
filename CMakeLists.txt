@@ -59,6 +59,25 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     target_link_options(namegen_libfuzzer PRIVATE -fsanitize=fuzzer)
   endif()
 
+  # The benchmark (-DNAMEGEN_BUILD_BENCH=ON): compile and generate against the frozen
+  # original and the C port. The C port comes from skeeto/fantasyname (c/namegen.h,
+  # public domain) at a pinned commit, fetched here only; the library never uses it.
+  if(NAMEGEN_BUILD_BENCH)
+    enable_language(C)
+    include(FetchContent)
+    FetchContent_Declare(fantasyname_c
+      GIT_REPOSITORY https://github.com/skeeto/fantasyname.git
+      GIT_TAG        e5a475287902457dac09284fb681c13dfdd96715
+      SOURCE_SUBDIR  c)  # no CMakeLists.txt there: populated, not added
+    FetchContent_MakeAvailable(fantasyname_c)
+    add_executable(namegen_bench bench/bench.cc bench/cport.c)
+    # By path: the C port's header is also named namegen.h.
+    set_source_files_properties(bench/cport.c PROPERTIES
+      COMPILE_DEFINITIONS "NAMEGEN_C_HEADER=\"${fantasyname_c_SOURCE_DIR}/c/namegen.h\"")
+    target_link_libraries(namegen_bench PRIVATE namegen)
+    add_test(NAME namegen_bench_check COMMAND namegen_bench --check)
+  endif()
+
   # A runnable tour of the library (not a test): ./build/namegen_demo [pattern [n]]
   add_executable(namegen_demo examples/demo.cc)
   target_link_libraries(namegen_demo PRIVATE namegen)
