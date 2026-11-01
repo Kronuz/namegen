@@ -194,7 +194,16 @@ private:
 				out += raw[i];
 			}
 		} else {
-			out += letters[below(sizeof(letters) - 1)];
+			char c = letters[below(sizeof(letters) - 1)];
+			if (!literal && !symbols && NameGen::Generator::SymbolMap().count(std::string(1, c))) {
+				// i is a symbol: without symbols it goes in a literal group, "(i)", which
+				// keeps "!(i)" and the Turkish capital in this class.
+				out += '(';
+				out += c;
+				out += ')';
+			} else {
+				out += c;
+			}
 		}
 	}
 

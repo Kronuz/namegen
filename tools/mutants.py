@@ -7,8 +7,11 @@ fail on each: the check that the tests see the fast paths and the fixes.
 BUILD_DIR is a configured build of this repository; namegen.cc is restored at the end.
 Two mutants need more than a plain build: the shared engine is a data race only
 ThreadSanitizer sees (pass --tsan with a -fsanitize=thread build), and the Turkish
-capital I only shows in a tr_TR.UTF-8 locale (skipped where the host has none).
+capital I only shows where the C library's tr_TR.UTF-8 maps i to U+0130 (glibc with the
+locale installed; macOS keeps I), so it is skipped elsewhere.
 """
+import ctypes
+import ctypes.util
 import pathlib
 import subprocess
 import sys
@@ -47,11 +50,18 @@ def run_tests(build):
     return None
 
 
+def turkish_capital_i():
+    libc = ctypes.CDLL(ctypes.util.find_library("c"))
+    libc.setlocale.restype = ctypes.c_char_p
+    if not libc.setlocale(6 if sys.platform.startswith("linux") else 0, b"tr_TR.UTF-8"):
+        return False
+    return libc.towupper(ord("i")) == 0x130
+
+
 def main():
     build = sys.argv[1]
     tsan = "--tsan" in sys.argv[2:]
-    locales = subprocess.run(["locale", "-a"], capture_output=True, text=True).stdout.lower()
-    turkish = "tr_tr.utf-8" in locales or "tr_tr.utf8" in locales
+    turkish = turkish_capital_i()
     original = SOURCE.read_text()
     survivors = []
     skipped = 0

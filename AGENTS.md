@@ -78,6 +78,9 @@ Clang with `-DNAMEGEN_FUZZ=ON` for `namegen_libfuzzer`.
   `<>`/`()` (the parser itself keeps an explicit stack); about 110,000 levels exhaust an 8 MB
   stack. The fuzz target caps inputs at 4096 bytes.
 - **`min()` ignores collapsing**, so a collapsed name can be shorter than `min()`.
+- **The Turkish capital needs glibc's tr_TR.UTF-8.** Only there does `towupper` take `i`
+  outside ASCII (macOS keeps `I`); the Linux CI jobs install `locales-all` so `namegen_diff`
+  covers that path, and `tools/mutants.py` skips its mutant on hosts without the mapping.
 - **The C port is a comparator, not an oracle**: it uses its own generator, so seeds do not
   match; `namegen_bench --check` checks that its names are names of the pattern.
 

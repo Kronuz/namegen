@@ -16,6 +16,7 @@ int main(int argc, char** argv) {
 		"", "s", "v", "V", "sV'i", "!s(dim)", "<c|v|>!s", "~<sV'i>", "!~(foo)", "~!(foo)", "(aaa)", "(|)", "|",
 		"<|>", "!<b<||v|V><||s|S|b>>", "(a|b|c|d)", "!|s", "s!", "<s!>", "~", "!~", std::string("a\0b", 3),
 		"(\xc3\xa9t\xc3\xa9)", "!(\xc3\xa9t\xc3\xa9)", "~(\xc3\xa9t\xc3\xa9)", "\xff!s", "(iii)",
+		"!(i)", "!(istanbul)", "~!(iz)", "!(\xc4\xb1)", "!<(i)|(a)>",  // Turkish i, dotless i
 		"ssssssssssssssssssss", "<<<<<<<<<<v>>>>>>>>>>", MIDDLE_EARTH, JAPANESE_NAMES_CONSTRAINED,
 		JAPANESE_NAMES_DIVERSE, CHINESE_NAMES, GREEK_NAMES, HAWAIIAN_NAMES_1, HAWAIIAN_NAMES_2,
 		OLD_LATIN_PLACE_NAMES, DRAGONS_PERN, DRAGON_RIDERS, POKEMON, FANTASY_VOWELS_R, FANTASY_S_A,
