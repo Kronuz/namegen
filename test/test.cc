@@ -91,6 +91,24 @@ int main() {
 		}
 	}
 
+	// A seed gives the same names on every platform and standard library: the draw is
+	// the library's own arithmetic over std::mt19937's outputs.
+	{
+		auto first4 = [](const char* pattern) {
+			Generator g(pattern);
+			std::mt19937 engine(42);
+			std::string names;
+			for (int i = 0; i < 4; ++i) {
+				names += (i ? " " : "") + g.generate(engine);
+			}
+			return names;
+		};
+		CHECK(first4("!sV'i") == "Shyu'loaf Ingi'doof Baney'munch Uska'lump");
+		CHECK(first4("!<b<||v|V><||s|S|b>>") == "Selna Liamest Crisavei Baleubai");
+		CHECK(first4(MIDDLE_EARTH) == "ereadurta bren gororbistor brenorbisgil");
+		CHECK(first4(GREEK_NAMES) == "creudios yqios mygios pheybyos");
+	}
+
 	// Collapsing runs of three: one of a, h, i, j, q, u, v, w, x, y; two of anything else.
 	CHECK(Generator("(aaa)").toString() == "a");
 	CHECK(Generator("(bbbb)").toString() == "bb");

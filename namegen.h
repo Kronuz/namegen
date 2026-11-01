@@ -10,17 +10,19 @@
  *
  * @example
  * NameGen::Generator generator("sV'i");
- * generator.toString();  // Returns a new name each call with produce()
+ * generator.toString();  // Returns a new name each call
  * // => "entheu'loaf"
  *
  * ## Pattern Syntax
  *
- *   The compile() function creates a name generator based on an input
- * pattern. The letters s, v, V, c, B, C, i, m, M, D, and d represent
+ *   The Generator constructor compiles a pattern into a name generator.
+ * The letters s, S, b, v, V, c, B, C, i, m, M, D, and d represent
  * different types of random replacements. Everything else is produced
  * literally.
  *
  *   s - generic syllable
+ *   S - syllable ending in a vowel, like "bra" or "gio"
+ *   b - syllable ending in a consonant, like "bal" or "dier"
  *   v - vowel
  *   V - vowel or vowel combination
  *   c - consonant
@@ -40,7 +42,7 @@
  * above. Imagine the entire pattern is wrapped in one of these.
  *
  *   In both types of groupings, a vertical bar | denotes a random
- * choice. Empty groups are allowed. For example, "(foo|bar)" produces
+ * choice, each alternative equally likely. Empty groups are allowed. For example, "(foo|bar)" produces
  * either "foo" or "bar". The pattern "<c|v|>" produces a constant,
  * vowel, or nothing at all.
  *
@@ -57,14 +59,16 @@
  *
  * ## Internals
  *
- *   A name generator is anything with a toString() method, including,
- * importantly, strings themselves. The generator constructors
- * (Random, Sequence) perform additional optimizations when *not* used
- * with the `new` keyword: they may pass through a provided generator,
- * combine provided generators, or even return a simple string.
+ *   A Generator is a tree: Random chooses one of its generators,
+ * Sequence and Generator produce all of theirs in order, Literal
+ * produces its text, and Capitalizer, Reverser and Collapser transform
+ * what their generators produce. The pattern constructor builds such a
+ * tree, with a Collapser at its root unless collapse_triples is false.
+ * The trees can also be built by hand from these classes.
  *
- *   New pattern symbols added to Generator.symbols will automatically
- * be used by the compiler.
+ *   Every choice takes one draw from an std::mt19937: toString() from
+ * the thread's engine(), generate() from the caller's. The symbols are
+ * the tables of SymbolMap().
  */
 
 #pragma once
