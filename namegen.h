@@ -62,13 +62,19 @@
  *   A Generator is a tree: Random chooses one of its generators,
  * Sequence and Generator produce all of theirs in order, Literal
  * produces its text, and Capitalizer, Reverser and Collapser transform
- * what their generators produce. The pattern constructor builds such a
- * tree, with a Collapser at its root unless collapse_triples is false.
- * The trees can also be built by hand from these classes.
+ * what their generators produce. Trees can be built by hand from these
+ * classes. The pattern constructor compiles the pattern instead: the
+ * Generator holds one node with the pattern's text and a table of its
+ * groups and their alternatives, and a name is one walk of the text
+ * that jumps to the chosen alternatives. NameGen::generate() walks a
+ * pattern without compiling it, finding alternatives as it goes.
  *
- *   Every choice takes one draw from an std::mt19937: toString() from
- * the thread's engine(), generate() from the caller's. The symbols are
- * the tables of SymbolMap().
+ *   A choice among n >= 2 alternatives takes one 32-bit output of an
+ * std::mt19937 (more in the rare case it is rejected), each alternative
+ * with probability 1/n; a choice of one alternative and a literal
+ * character take none. toString() draws from the thread's engine(),
+ * generate() from the caller's. The symbols are the tables of
+ * SymbolMap().
  */
 
 #pragma once
@@ -77,7 +83,6 @@
 #include <iosfwd>         // for wstring
 #include <memory>         // for unique_ptr
 #include <random>         // for mt19937
-#include <stack>          // for stack
 #include <string>         // for string
 #include <unordered_map>  // for unordered_map
 #include <vector>         // for vector
@@ -148,52 +153,19 @@ namespace NameGen {
 // names on this thread.
 std::mt19937& engine();
 
+// One name from `pattern` without compiling it into a Generator: the name
+// Generator(pattern, collapse_triples).generate(engine) gives for the same engine
+// state, and the same std::invalid_argument for a malformed pattern. For a pattern
+// used once; a Generator is faster for many names.
+std::string generate(const std::string& pattern, std::mt19937& engine, bool collapse_triples=true);
+std::string generate(const char* pattern, std::mt19937& engine, bool collapse_triples=true);
+// The same, written over `name`, reusing its storage.
+void generate(std::string& name, const char* pattern, size_t length, std::mt19937& engine,
+              bool collapse_triples=true);
+
 
 class Generator
 {
-	typedef enum wrappers {
-		capitalizer,
-		reverser
-	} wrappers_t;
-
-	typedef enum group_types {
-		symbol,
-		literal
-	} group_types_t;
-
-
-	class Group {
-		std::stack<wrappers_t> wrappers;
-		std::vector<std::unique_ptr<Generator>> set;
-		Generator* run = nullptr;  // the characters last added, when they end the sequence
-
-	public:
-		group_types_t type;
-
-		Group(group_types_t type_);
-		virtual ~Group() { }
-
-                std::unique_ptr<Generator> produce();
-		void split();
-		void wrap(wrappers_t type);
-		void add(std::unique_ptr<Generator>&& g);
-
-		virtual void add(char c);
-	};
-
-
-	class GroupSymbol : public Group {
-	public:
-		GroupSymbol();
-		void add(char c);
-	};
-
-
-	class GroupLiteral : public Group {
-	public:
-		GroupLiteral();
-	};
-
 protected:
 	std::vector<std::unique_ptr<Generator>> generators;
 
@@ -223,6 +195,10 @@ public:
 	virtual std::string toString() const;
 	// A name drawn from `engine` rather than from this thread's engine().
 	std::string generate(std::mt19937& engine) const;
+	// A name written over `name`, reusing its storage: from this thread's engine(), or
+	// from `engine`.
+	void generate(std::string& name) const;
+	void generate(std::string& name, std::mt19937& engine) const;
 
 	void add(std::unique_ptr<Generator>&& g);
 };

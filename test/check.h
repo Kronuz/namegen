@@ -17,13 +17,14 @@
 #include <random>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #define CHECK(x) do { if (!(x)) { std::fprintf(stderr, "%s:%d: CHECK(%s) failed\n", __FILE__, __LINE__, #x); std::abort(); } } while (0)
 
 namespace check {
 
 // The library's mapping from a draw to an alternative.
-constexpr ref::Pick library_pick = ref::Pick::uniform;
+constexpr ref::Pick library_pick = ref::Pick::lemire;
 
 struct Stats {
 	unsigned long patterns = 0, invalid = 0, names = 0, same_as_old = 0, differ_from_old = 0, reference = 0;
@@ -69,11 +70,45 @@ std::unique_ptr<G> build(const std::string& pattern, bool collapse, std::string&
 	return nullptr;
 }
 
-// Checks one pattern with `seeds` engines and `names` names from each.
+// The reference's tree built from the library's public classes (Random, Sequence,
+// Literal, Capitalizer, Reverser, Collapser): the library's other way to draw a name.
+inline std::unique_ptr<NameGen::Generator> tree(const ref::Node& n) {
+	std::vector<std::unique_ptr<NameGen::Generator>> kids;
+	switch (n.kind) {
+		case ref::Node::Char:
+			return std::unique_ptr<NameGen::Generator>(new NameGen::Literal(std::string(1, n.c)));
+		case ref::Node::Empty:
+			return std::unique_ptr<NameGen::Generator>(new NameGen::Literal(""));
+		case ref::Node::Symbol:
+			for (auto& w : *n.table) {
+				kids.emplace_back(new NameGen::Literal(w));
+			}
+			return std::unique_ptr<NameGen::Generator>(new NameGen::Random(std::move(kids)));
+		case ref::Node::Sequence:
+		case ref::Node::Choice:
+			for (auto& k : n.kids) {
+				kids.push_back(tree(k));
+			}
+			if (n.kind == ref::Node::Choice) {
+				return std::unique_ptr<NameGen::Generator>(new NameGen::Random(std::move(kids)));
+			}
+			return std::unique_ptr<NameGen::Generator>(new NameGen::Sequence(std::move(kids)));
+		case ref::Node::Capitalize:
+			return std::unique_ptr<NameGen::Generator>(new NameGen::Capitalizer(tree(n.kids[0])));
+		case ref::Node::Reverse:
+			return std::unique_ptr<NameGen::Generator>(new NameGen::Reverser(tree(n.kids[0])));
+	}
+	return nullptr;
+}
+
+// Checks one pattern with `seeds` engines and `names` names from each: the compiled
+// Generator, the one-shot NameGen::generate(), the tree of public classes and (ASCII,
+// C locale) the reference must give the same names for the same engine state; the
+// frozen original must give them too where the pattern makes no choice.
 inline void pattern(const std::string& p, bool collapse, unsigned seed, int seeds = 2, int names = 4) {
 	auto& st = stats();
 	++st.patterns;
-	std::string old_error, new_error, ref_error;
+	std::string old_error, new_error, ref_error, one_error;
 	auto o = build<NameGenOld::Generator>(p, collapse, old_error);
 	auto n = build<NameGen::Generator>(p, collapse, new_error);
 	std::unique_ptr<ref::Pattern> r;
@@ -82,8 +117,15 @@ inline void pattern(const std::string& p, bool collapse, unsigned seed, int seed
 	} catch (const std::invalid_argument& e) {
 		ref_error = e.what();
 	}
+	try {
+		std::mt19937 any(seed);
+		NameGen::generate(p, any, collapse);
+	} catch (const std::invalid_argument& e) {
+		one_error = e.what();
+	}
 	CHECK(old_error == new_error);
 	CHECK(ref_error == new_error);
+	CHECK(one_error == new_error);
 	CHECK(!o == !n && !n == !r);
 	if (!n) {
 		++st.invalid;
@@ -102,12 +144,17 @@ inline void pattern(const std::string& p, bool collapse, unsigned seed, int seed
 		++st.saturated;
 	}
 
-	const bool same_as_old = library_pick == ref::Pick::legacy || widest_choice(r->root) <= 2;
+	NameGen::Generator t;
+	t.add(collapse ? std::unique_ptr<NameGen::Generator>(new NameGen::Collapser(tree(r->root))) : tree(r->root));
+	CHECK(t.combinations() == n->combinations() && t.min() == n->min() && t.max() == n->max());
+
+	const bool same_as_old = widest_choice(r->root) <= 1;  // no choice: no draw anywhere
 	const bool with_reference = ascii(p) && c_locale();
+	std::string one, reused;
 	for (int s = 0; s < seeds; ++s) {
 		std::mt19937::result_type value = seed * 7919u + static_cast<unsigned>(s);
 		rng.seed(value);                    // the frozen original's engine
-		std::mt19937 e(value), e_ref(value);
+		std::mt19937 e(value), e_ref(value), e_tree(value), e_one(value), e_reused(value);
 		NameGen::engine().seed(value);      // this thread's engine, for toString()
 		std::mt19937 e_again(value);
 		for (int k = 0; k < names; ++k) {
@@ -115,6 +162,11 @@ inline void pattern(const std::string& p, bool collapse, unsigned seed, int seed
 			std::string b = n->generate(e);
 			++st.names;
 			CHECK(n->toString() == n->generate(e_again));
+			CHECK(t.generate(e_tree) == b);
+			NameGen::generate(one, p.data(), p.size(), e_one, collapse);
+			CHECK(one == b);
+			n->generate(reused, e_reused);
+			CHECK(reused == b);
 			if (same_as_old) {
 				CHECK(a == b);
 				++st.same_as_old;

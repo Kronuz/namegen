@@ -53,6 +53,8 @@ eight `FANTASY_*` sets (`FANTASY_VOWELS_R`, `FANTASY_S_A`, `FANTASY_H_L`, `FANTA
 NameGen::Generator(const std::string& pattern, bool collapse_triples = true);
 std::string toString() const;                      // a name from this thread's engine()
 std::string generate(std::mt19937& engine) const;  // a name from the caller's engine
+void generate(std::string& name) const;            // the same, written over name, reusing its storage
+void generate(std::string& name, std::mt19937& engine) const;
 size_t combinations() const;  // paths through the pattern; SIZE_MAX when they do not fit
 size_t min() const;           // shortest name in bytes, before collapsing
 size_t max() const;           // longest name in bytes
@@ -61,7 +63,24 @@ static const std::unordered_map<std::string, const std::vector<std::string>>& Sy
 ```
 
 A Generator does not change once built, so one Generator serves any number of threads.
-Every choice takes one draw (two engine outputs), a literal character included.
+A choice among n >= 2 alternatives takes one 32-bit engine output, and more only when that
+output is rejected (`2^32 mod n` of the 2^32 values are, so that each alternative has
+probability exactly 1/n); a choice of one alternative and a literal character take none.
+
+## One name without compiling
+
+```cpp
+std::string NameGen::generate(const std::string& pattern, std::mt19937& engine, bool collapse_triples = true);
+std::string NameGen::generate(const char* pattern, std::mt19937& engine, bool collapse_triples = true);
+void NameGen::generate(std::string& name, const char* pattern, size_t length, std::mt19937& engine,
+                       bool collapse_triples = true);
+```
+
+For a pattern used once: it reads the pattern's brackets, then walks the pattern, finding
+each group's alternatives as it enters the group. For the same engine state it gives the
+name `Generator(pattern, collapse_triples).generate(engine)` gives, and it throws the same
+`std::invalid_argument` for a malformed pattern. A Generator is faster from the second name
+on.
 
 ## Engines
 
@@ -73,11 +92,13 @@ Each thread has its own engine, seeded from the clock and the thread's id the fi
 thread draws. `NameGen::engine().seed(n)` makes the thread's next names repeat;
 `generate(engine)` draws from an engine the caller owns. A seed gives the same names with
 every compiler and standard library, because the library computes each choice from the
-engine's outputs itself (`test/test.cc` pins four patterns at seed 42).
+engine's outputs itself (`test/test.cc` pins four patterns at seed 42). `NameGen::generate()`
+and a Generator agree for a seed.
 
 ## Building a tree by hand
 
-The pattern constructor builds a tree of these classes, which can also be composed directly:
+A tree of these classes can be composed by hand; it draws as a compiled pattern does, so a
+tree that spells a pattern gives that pattern's names for a seed:
 
 | Class | Produces |
 | --- | --- |

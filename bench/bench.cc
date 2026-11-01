@@ -6,12 +6,15 @@
 //   namegen_bench --check   checks that each arm's names are names the pattern can produce
 //
 // Arms, interleaved within each round:
-//   compile     NameGen::Generator(pattern), its tree built and destroyed
-//   toString    one name from a compiled generator, the thread's engine
-//   one-shot    NameGen::Generator(pattern).toString(): what one C port call does
-//   original *  the same operations on the frozen original
+//   compile     NameGen::Generator(pattern), compiled and destroyed
+//   toString    one name from a compiled Generator, from the thread's engine
+//   generate    one name from a compiled Generator into a reused std::string,
+//               generate(name, engine): what a C port call into a buffer does
+//   one-shot    NameGen::generate(name, pattern, length, engine) into a reused
+//               std::string, no Generator: what one C port call does
+//   original *  compile and toString on the frozen original
 //   C port      namegen(buf, 256, pattern, &seed): parses the pattern and draws in one pass
-//   toString'   toString again, the A/A arm: its spread from toString is the noise
+//   generate'   generate again, the A/A arm: its spread from generate is the noise
 #include "../test/check.h"
 
 #include <algorithm>
@@ -129,9 +132,13 @@ int main(int argc, char** argv) {
 			NameGen::Generator g(row.pattern, false);
 			NameGenOld::Generator o(row.pattern, false);
 			ref::Pattern r(row.pattern);
+			std::mt19937 engine(1);
+			std::string name;
 			for (int i = 0; i < 2000; ++i) {
 				CHECK(producible(r, g.toString()));
 				CHECK(producible(r, o.toString()));
+				NameGen::generate(name, row.pattern, std::strlen(row.pattern), engine, false);
+				CHECK(producible(r, name));
 				if (row.cport) {
 					CHECK(cport_namegen(buf, sizeof(buf), row.pattern, &seed) == 0);
 					CHECK(producible(r, buf));
@@ -147,14 +154,17 @@ int main(int argc, char** argv) {
 		const std::string p = row.pattern;
 		NameGen::Generator g(p);
 		NameGenOld::Generator o(p);
+		std::mt19937 engine(0x9e3779b9u);
+		std::string name;
+		const size_t length = p.size();
 		std::vector<Arm> arms = {
 			{"compile", [&] { NameGen::Generator x(p); return x.max(); }, {}},
 			{"toString", [&] { return g.toString().size(); }, {}},
-			{"one-shot", [&] { return NameGen::Generator(p).toString().size(); }, {}},
+			{"generate", [&] { g.generate(name, engine); return name.size(); }, {}},
+			{"one-shot", [&] { NameGen::generate(name, row.pattern, length, engine); return name.size(); }, {}},
 			{"original compile", [&] { NameGenOld::Generator x(p); return x.max(); }, {}},
 			{"original toString", [&] { return o.toString().size(); }, {}},
-			{"original one-shot", [&] { return NameGenOld::Generator(p).toString().size(); }, {}},
-			{"toString'", [&] { return g.toString().size(); }, {}},
+			{"generate'", [&] { g.generate(name, engine); return name.size(); }, {}},
 		};
 		if (row.cport) {
 			arms.insert(arms.begin() + 6, Arm{"C port", [&] {

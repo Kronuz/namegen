@@ -3,18 +3,21 @@
 // patterns of ASCII bytes 1 to 127 (the case where capitalizing, reversing and
 // collapsing are byte operations in every locale).
 //
-// It draws from the engine where the library does: once for every literal character,
-// every symbol and every group with two or more alternatives, and never for an empty
-// group. `Pick` maps a draw to an alternative: `legacy` as the original C++ port did
-// (round a draw over [0, n - 1] to the nearest integer, which gives the first and the
-// last alternative half the weight of the others), `uniform` as the reference
-// JavaScript (`Math.floor(Math.random() * n)`) and the C port do.
+// `Pick` says how a choice among n alternatives draws from the engine:
+// - `legacy`, as the original C++ port did: a double from two 32-bit outputs, over
+//   [0, n - 1], rounded to the nearest integer, which gives the first and the last
+//   alternative half the weight of the others. It draws for every choice, one
+//   alternative included, and for every literal character.
+// - `lemire`, as the library does: no draw for one alternative or a character; for
+//   n >= 2 a 32-bit output x, redrawn while x * n mod 2^32 < 2^32 mod n, and
+//   alternative floor(x * n / 2^32). Each alternative has probability 1/n.
 #pragma once
 
 #include "namegen.h"
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <random>
 #include <stdexcept>
@@ -23,16 +26,23 @@
 
 namespace ref {
 
-enum class Pick { legacy, uniform };
+enum class Pick { legacy, lemire };
 
 inline std::size_t pick(std::mt19937& engine, std::size_t n, Pick mode) {
 	if (mode == Pick::legacy) {
 		std::uniform_real_distribution<double> distribution(0, n - 1);
 		return static_cast<std::size_t>(static_cast<int>(distribution(engine) + 0.5));
 	}
-	double u = std::uniform_real_distribution<double>(0.0, 1.0)(engine);
-	std::size_t i = static_cast<std::size_t>(u * static_cast<double>(n));
-	return i < n ? i : n - 1;
+	if (n < 2) {
+		return 0;
+	}
+	const std::uint64_t reject = (std::uint64_t(1) << 32) % n;  // 2^32 mod n
+	for (;;) {
+		std::uint64_t product = static_cast<std::uint64_t>(engine() & 0xffffffffu) * n;
+		if ((product & 0xffffffffu) >= reject) {
+			return static_cast<std::size_t>(product >> 32);
+		}
+	}
 }
 
 struct Node {
