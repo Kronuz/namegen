@@ -84,6 +84,13 @@ int main() {
 	CHECK(Generator("(a|b|c)").combinations() == 3);
 	CHECK(Generator("(foo)").combinations() == 1);
 	CHECK(Generator("").combinations() == 1);
+	CHECK(Generator("ssssssssssssssssssss").combinations() == static_cast<size_t>(-1));  // 115^20 saturates
+	CHECK(Generator("(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)"
+	                "(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)"
+	                "(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)"
+	                "(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)").combinations()
+	      == (static_cast<size_t>(1) << 63));                                                // 2^63 is exact
+
 	CHECK(Generator("s").min() == 2);
 	CHECK(Generator("s").max() == 4);
 	CHECK(Generator("(a|bcd)v").min() == 2);

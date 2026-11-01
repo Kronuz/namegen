@@ -92,13 +92,15 @@ inline void pattern(const std::string& p, bool collapse, unsigned seed, int seed
 
 	CHECK(n->min() == o->min() && n->min() == ref::min_length(r->root));
 	CHECK(n->max() == o->max() && n->max() == ref::max_length(r->root));
+	// combinations() is the exact count, or the largest size_t when the count does not
+	// fit; the original wrapped around there.
 	ref::wide exact = ref::combinations(r->root);
+	CHECK(n->combinations() == static_cast<std::size_t>(exact));
 	if (exact < static_cast<ref::wide>(std::numeric_limits<std::size_t>::max())) {
 		CHECK(n->combinations() == o->combinations());
 	} else {
 		++st.saturated;
 	}
-	(void)exact;
 
 	const bool same_as_old = library_pick == ref::Pick::legacy || widest_choice(r->root) <= 2;
 	const bool with_reference = ascii(p) && c_locale();

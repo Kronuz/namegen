@@ -236,11 +236,24 @@ Generator::Generator(std::vector<std::unique_ptr<Generator>>&& generators_) :
 }
 
 
+// Counts that do not fit in a size_t saturate at its maximum rather than wrap.
+static size_t saturating_add(size_t a, size_t b)
+{
+	return a > static_cast<size_t>(-1) - b ? static_cast<size_t>(-1) : a + b;
+}
+
+
+static size_t saturating_multiply(size_t a, size_t b)
+{
+	return a != 0 && b > static_cast<size_t>(-1) / a ? static_cast<size_t>(-1) : a * b;
+}
+
+
 size_t Generator::combinations() const
 {
 	size_t total = 1;
 	for (auto& g : generators) {
-		total *= g->combinations();
+		total = saturating_multiply(total, g->combinations());
 	}
 	return total;
 }
@@ -320,7 +333,7 @@ size_t Random::combinations() const
 {
 	size_t total = 0;
 	for (auto& g : generators) {
-		total += g->combinations();
+		total = saturating_add(total, g->combinations());
 	}
 	return total ? total : 1;
 }
