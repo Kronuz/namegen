@@ -14,6 +14,7 @@
 #include <cwchar>     // for size_t, mbsrtowcs, wcsrtombs
 #include <cwctype>    // for towupper
 #include <functional> // for hash
+#include <iterator>   // for iterator_traits
 #include <memory>     // for make_unique
 #include <random>     // for mt19937, uniform_real_distribution
 #include <stdexcept>  // for invalid_argument, out_of_range
@@ -225,6 +226,121 @@ std::unique_ptr<T> make_unique(Args&&... args)
 #endif
 
 
+// A choice among n alternatives, from two engine outputs. It is the choice the original
+// made with std::uniform_real_distribution<double>(0, n - 1): u = (x1 + x2 * 2^32) / 2^64
+// from two 32-bit outputs, as generate_canonical computes it in libc++, libstdc++ and the
+// MSVC STL, scaled by n - 1 in the distribution's expression, rounded to the nearest
+// integer. Computing u here skips libstdc++'s run-time logarithms.
+static size_t choose(std::mt19937& e, size_t n)
+{
+	double low = static_cast<double>(e());
+	double high = static_cast<double>(e());
+	double u = (low + high * 4294967296.0) / 18446744073709551616.0;
+	double scaled = u * static_cast<double>(n - 1) + 0.0;
+	int rnd = scaled + 0.5;
+	return static_cast<size_t>(rnd);
+}
+
+
+// A draw whose choice is known (one alternative): the engine moves on as it would.
+static void skip(std::mt19937& e, size_t draws)
+{
+	e.discard(2 * static_cast<unsigned long long>(draws));
+}
+
+
+namespace {
+
+// The compiler's nodes for what the original built as a Random of one Literal per
+// alternative: a symbol (one node over the symbol's table, no copy of its strings)
+// and a run of literal characters (one node for the run, one draw per character as
+// the original's one-alternative Random made). Nothing outside the compiled tree
+// reaches them; they count and draw as the nodes they stand for.
+struct SymbolTable {
+	const std::vector<std::string>* words = nullptr;
+	size_t min = 0;
+	size_t max = 0;
+};
+
+
+class Symbol final : public Generator {
+	const SymbolTable& table;
+
+public:
+	explicit Symbol(const SymbolTable& table_) : table(table_) {}
+
+	size_t combinations() const override { return table.words->size(); }
+	size_t min() const override { return table.min; }
+	size_t max() const override { return table.max; }
+
+	std::string toString() const override
+	{
+		std::string str;
+		append(str, engine());
+		return str;
+	}
+
+protected:
+	void append(std::string& out, std::mt19937& e) const override
+	{
+		out += (*table.words)[choose(e, table.words->size())];
+	}
+};
+
+
+class Run final : public Generator {
+	std::string text;
+
+public:
+	explicit Run(char c) : text(1, c) {}
+
+	void push(char c) { text += c; }
+
+	size_t combinations() const override { return 1; }
+	size_t min() const override { return text.size(); }
+	size_t max() const override { return text.size(); }
+
+	std::string toString() const override
+	{
+		std::string str;
+		append(str, engine());
+		return str;
+	}
+
+protected:
+	void append(std::string& out, std::mt19937& e) const override
+	{
+		skip(e, text.size());
+		out += text;
+	}
+};
+
+
+// The symbol tables by character, built once from SymbolMap().
+const SymbolTable* symbol_table(char c)
+{
+	static const auto* const tables = [] {
+		auto* t = new SymbolTable[256];
+		for (const auto& entry : Generator::SymbolMap()) {
+			if (entry.first.size() == 1 && !entry.second.empty()) {
+				auto& table = t[static_cast<unsigned char>(entry.first[0])];
+				table.words = &entry.second;
+				table.min = static_cast<size_t>(-1);
+				for (const auto& w : entry.second) {
+					table.min = w.size() < table.min ? w.size() : table.min;
+					table.max = w.size() > table.max ? w.size() : table.max;
+				}
+			}
+		}
+		return t;
+	}();
+	const SymbolTable* table = &tables[static_cast<unsigned char>(c)];
+	return table->words ? table : nullptr;
+}
+
+}  // namespace
+
+
 Generator::Generator()
 {
 }
@@ -386,9 +502,7 @@ void Random::append_own(std::string& out, std::mt19937& e) const
 	if (!generators.size()) {
 		return;
 	}
-	std::uniform_real_distribution<double> distribution(0, generators.size() - 1);
-	int rnd = distribution(e) + 0.5;
-	append_output(*generators[rnd], out, e);
+	append_output(*generators[choose(e, generators.size())], out, e);
 }
 
 
@@ -466,13 +580,46 @@ void Reverser::append(std::string& out, std::mt19937& e) const
 	}
 }
 
+// Reverser, Capitalizer and Collapser work on characters: they decode the bytes with
+// the C library's multibyte functions (in the current locale), transform, and encode
+// back; bytes the locale does not decode give "", and a NUL ends the text. Bytes 1 to
+// 127 are ASCII, which decodes to itself in every locale the C libraries ship (each
+// is a superset of ASCII), so a text of only those bytes is transformed in place, with
+// no conversion and no allocation, and gives what the conversion gives.
+static bool plain(const std::string& s, size_t from)
+{
+	for (size_t i = from; i < s.size(); ++i) {
+		unsigned char c = static_cast<unsigned char>(s[i]);
+		if (c == 0 || c > 0x7f) {
+			return false;
+		}
+	}
+	return true;
+}
+
+
+// Replaces out[from, end) by f(that text, decoded), encoded back.
+template <typename F>
+static void transform_decoded(std::string& out, size_t from, F f)
+{
+	std::wstring str = towstring(out.substr(from));
+	f(str);
+	out.resize(from);
+	out += tostring(str);
+}
+
+
 void Reverser::append_own(std::string& out, std::mt19937& e) const
 {
-	std::string generated;
-	append_generators(generated, e);
-	std::wstring str = towstring(generated);
-	std::reverse(str.begin(), str.end());
-	out += tostring(str);
+	size_t from = out.size();
+	append_generators(out, e);
+	if (plain(out, from)) {
+		std::reverse(out.begin() + from, out.end());
+		return;
+	}
+	transform_decoded(out, from, [](std::wstring& str) {
+		std::reverse(str.begin(), str.end());
+	});
 }
 
 Capitalizer::Capitalizer(std::unique_ptr<Generator>&& g)
@@ -498,11 +645,25 @@ void Capitalizer::append(std::string& out, std::mt19937& e) const
 
 void Capitalizer::append_own(std::string& out, std::mt19937& e) const
 {
-	std::string generated;
-	append_generators(generated, e);
-	std::wstring str = towstring(generated);
-	str[0] = std::towupper(str[0]);
-	out += tostring(str);
+	size_t from = out.size();
+	append_generators(out, e);
+	if (plain(out, from)) {
+		if (from == out.size()) {
+			return;
+		}
+		// towupper() can leave ASCII (a Turkish locale maps i to U+0130): then the
+		// encoding takes over.
+		std::wint_t upper = std::towupper(static_cast<unsigned char>(out[from]));
+		if (upper > 0 && upper <= 0x7f) {
+			out[from] = static_cast<char>(upper);
+			return;
+		}
+	}
+	transform_decoded(out, from, [](std::wstring& str) {
+		if (!str.empty()) {
+			str[0] = std::towupper(str[0]);
+		}
+	});
 }
 
 
@@ -527,15 +688,16 @@ void Collapser::append(std::string& out, std::mt19937& e) const
 	}
 }
 
-void Collapser::append_own(std::string& out, std::mt19937& e) const
+// Keeps at most one of a run of a, h, i, j, q, u, v, w, x or y and at most two of a
+// run of anything else, writing over [first, last); returns the new end.
+template <typename It>
+static It collapse(It first, It last)
 {
-	std::string generated;
-	append_generators(generated, e);
-	std::wstring str = towstring(generated);
-	std::wstring collapsed;
+	It out = first;
 	int cnt = 0;
-	wchar_t pch = L'\0';
-	for (auto ch : str) {
+	typename std::iterator_traits<It>::value_type pch = 0;
+	for (It it = first; it != last; ++it) {
+		auto ch = *it;
 		if (ch == pch) {
 			cnt++;
 		} else {
@@ -556,11 +718,25 @@ void Collapser::append_own(std::string& out, std::mt19937& e) const
 				mch = 1;
 		}
 		if (cnt < mch) {
-			collapsed.push_back(ch);
+			*out++ = ch;
 		}
 		pch = ch;
 	}
-	out += tostring(collapsed);
+	return out;
+}
+
+
+void Collapser::append_own(std::string& out, std::mt19937& e) const
+{
+	size_t from = out.size();
+	append_generators(out, e);
+	if (plain(out, from)) {
+		out.erase(collapse(out.begin() + from, out.end()), out.end());
+		return;
+	}
+	transform_decoded(out, from, [](std::wstring& str) {
+		str.erase(collapse(str.begin(), str.end()), str.end());
+	});
 }
 
 
@@ -651,14 +827,20 @@ void Generator::Group::add(std::unique_ptr<Generator>&& g)
 		set.push_back(make_unique<Sequence>());
 	}
 	set.back()->add(std::move(g));
+	run = nullptr;
 }
 
 void Generator::Group::add(char c)
 {
-	std::string value(1, c);
-	std::unique_ptr<Generator> g = make_unique<Random>();
-	g->add(make_unique<Literal>(value));
+	// A character after a character joins its run, unless a wrapper waits for it.
+	if (run && wrappers.empty()) {
+		static_cast<Run*>(run)->push(c);
+		return;
+	}
+	std::unique_ptr<Generator> g = make_unique<Run>(c);
+	Generator* added = wrappers.empty() ? g.get() : nullptr;
 	Group::add(std::move(g));
+	run = added;
 }
 
 std::unique_ptr<Generator> Generator::Group::produce()
@@ -679,6 +861,7 @@ void Generator::Group::split()
 		set.push_back(make_unique<Sequence>());
 	}
 	set.push_back(make_unique<Sequence>());
+	run = nullptr;
 }
 
 void Generator::Group::wrap(wrappers_t type)
@@ -693,17 +876,11 @@ Generator::GroupSymbol::GroupSymbol() :
 
 void Generator::GroupSymbol::add(char c)
 {
-	std::string value(1, c);
-	std::unique_ptr<Generator> g = make_unique<Random>();
-	try {
-		static const auto& symbols = SymbolMap();
-		for (const auto& s : symbols.at(value)) {
-			g->add(make_unique<Literal>(s));
-		}
-	} catch (const std::out_of_range&) {
-		g->add(make_unique<Literal>(value));
+	if (const SymbolTable* table = symbol_table(c)) {
+		Group::add(make_unique<Symbol>(*table));
+	} else {
+		Group::add(c);
 	}
-	Group::add(std::move(g));
 }
 
 Generator::GroupLiteral::GroupLiteral() :

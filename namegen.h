@@ -161,6 +161,7 @@ class Generator
 	class Group {
 		std::stack<wrappers_t> wrappers;
 		std::vector<std::unique_ptr<Generator>> set;
+		Generator* run = nullptr;  // the characters last added, when they end the sequence
 
 	public:
 		group_types_t type;
