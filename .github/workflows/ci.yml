@@ -12,3 +12,7 @@ concurrency:
 jobs:
   ci:
     uses: Kronuz/cpp-libraries/.github/workflows/cmake.yml@main
+    with:
+      # Every glibc locale, for namegen_diff's tr_TR.UTF-8 and en_US.ISO8859-1 runs (the
+      # Turkish dotted capital I takes the decoding path).
+      apt_packages: locales-all
