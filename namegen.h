@@ -72,6 +72,7 @@
 #include <stddef.h>       // for size_t
 #include <iosfwd>         // for wstring
 #include <memory>         // for unique_ptr
+#include <random>         // for mt19937
 #include <stack>          // for stack
 #include <string>         // for string
 #include <unordered_map>  // for unordered_map
@@ -138,6 +139,12 @@ namespace NameGen {
 #define FANTASY_S_E "(syth|sith|srr|sen|yth|ssen|then|fen|ssth|kel|syn|est|bess|inth|nen|tin|cor|sv|iss|ith|sen|slar|ssil|sthen|svis|s|ss|s|ss)(|(tys|eus|yn|of|es|en|ath|elth|al|ell|ka|ith|yrrl|is|isl|yr|ast|iy))(us|yn|en|ens|ra|rg|le|en|ith|ast|zon|in|yn|ys)"
 
 
+// The engine Generator::toString() draws from: one per thread, seeded from the clock
+// and the thread the first time that thread uses it. Seed it to repeat a sequence of
+// names on this thread.
+std::mt19937& engine();
+
+
 class Generator
 {
 	typedef enum wrappers {
@@ -185,6 +192,17 @@ class Generator
 protected:
 	std::vector<std::unique_ptr<Generator>> generators;
 
+	// Appends this generator's output to `out`, drawing from `engine`. Each class
+	// of the library overrides it; for a class derived from one of them it appends
+	// toString(), so an override of toString() is what such a class produces.
+	virtual void append(std::string& out, std::mt19937& engine) const;
+	// Appends the output of every generator in `generators`, in order.
+	void append_generators(std::string& out, std::mt19937& engine) const;
+	// Calls g.append(out, engine), for the classes derived from Generator.
+	static void append_output(const Generator& g, std::string& out, std::mt19937& engine) {
+		g.append(out, engine);
+	}
+
 public:
 	static const std::unordered_map<std::string, const std::vector<std::string>>& SymbolMap();
 
@@ -198,6 +216,8 @@ public:
 	virtual size_t min() const;
 	virtual size_t max() const;
 	virtual std::string toString() const;
+	// A name drawn from `engine` rather than from this thread's engine().
+	std::string generate(std::mt19937& engine) const;
 
 	void add(std::unique_ptr<Generator>&& g);
 };
@@ -213,6 +233,12 @@ public:
 	size_t min() const override;
 	size_t max() const override;
 	std::string toString() const override;
+
+protected:
+	void append(std::string& out, std::mt19937& engine) const override;
+
+private:
+	void append_own(std::string& out, std::mt19937& engine) const;
 };
 
 
@@ -221,6 +247,9 @@ class Sequence : public Generator
 public:
 	Sequence();
 	Sequence(std::vector<std::unique_ptr<Generator>>&& generators_);
+
+protected:
+	void append(std::string& out, std::mt19937& engine) const override;
 };
 
 
@@ -235,6 +264,9 @@ public:
 	size_t min() const override;
 	size_t max() const override;
 	std::string toString() const override;
+
+protected:
+	void append(std::string& out, std::mt19937& engine) const override;
 };
 
 
@@ -243,6 +275,12 @@ public:
 	Reverser(std::unique_ptr<Generator>&& g);
 
 	std::string toString() const override;
+
+protected:
+	void append(std::string& out, std::mt19937& engine) const override;
+
+private:
+	void append_own(std::string& out, std::mt19937& engine) const;
 };
 
 
@@ -252,6 +290,12 @@ public:
 	Capitalizer(std::unique_ptr<Generator>&& g);
 
 	std::string toString() const override;
+
+protected:
+	void append(std::string& out, std::mt19937& engine) const override;
+
+private:
+	void append_own(std::string& out, std::mt19937& engine) const;
 };
 
 
@@ -261,6 +305,12 @@ public:
 	Collapser(std::unique_ptr<Generator>&& g);
 
 	std::string toString() const override;
+
+protected:
+	void append(std::string& out, std::mt19937& engine) const override;
+
+private:
+	void append_own(std::string& out, std::mt19937& engine) const;
 };
 
 }

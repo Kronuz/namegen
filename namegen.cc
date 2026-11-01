@@ -13,15 +13,26 @@
 #include <chrono>     // for rng seed
 #include <cwchar>     // for size_t, mbsrtowcs, wcsrtombs
 #include <cwctype>    // for towupper
+#include <functional> // for hash
 #include <memory>     // for make_unique
 #include <random>     // for mt19937, uniform_real_distribution
 #include <stdexcept>  // for invalid_argument, out_of_range
+#include <thread>     // for this_thread::get_id
+#include <typeinfo>   // for typeid
 
 
 using namespace NameGen;
 
 
-static std::mt19937 rng(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+// One engine per thread: concurrent toString() calls never share one. The thread's
+// id joins the clock in the seed so threads that start together still differ.
+std::mt19937& NameGen::engine()
+{
+	thread_local std::mt19937 rng(static_cast<std::mt19937::result_type>(
+		static_cast<unsigned long long>(std::chrono::high_resolution_clock::now().time_since_epoch().count()) ^
+		std::hash<std::thread::id>()(std::this_thread::get_id())));
+	return rng;
+}
 
 
 // https://isocpp.org/wiki/faq/ctors#static-init-order
@@ -255,11 +266,37 @@ size_t Generator::max() const
 }
 
 
+// Every class of the library produces its output with append(), into one string. The
+// typeid() test sends a class derived from one of them to its own toString().
+void Generator::append(std::string& out, std::mt19937& e) const
+{
+	if (typeid(*this) == typeid(Generator)) {
+		append_generators(out, e);
+	} else {
+		out += toString();
+	}
+}
+
+
+void Generator::append_generators(std::string& out, std::mt19937& e) const
+{
+	for (auto& g : generators) {
+		g->append(out, e);
+	}
+}
+
+
 std::string Generator::toString() const {
 	std::string str;
-	for (auto& g : generators) {
-		str.append(g->toString());
-	}
+	append_generators(str, engine());
+	return str;
+}
+
+
+std::string Generator::generate(std::mt19937& e) const
+{
+	std::string str;
+	append(str, e);
 	return str;
 }
 
@@ -315,12 +352,30 @@ size_t Random::max() const
 
 std::string Random::toString() const
 {
+	std::string str;
+	append_own(str, engine());
+	return str;
+}
+
+
+void Random::append(std::string& out, std::mt19937& e) const
+{
+	if (typeid(*this) == typeid(Random)) {
+		append_own(out, e);
+	} else {
+		out += toString();
+	}
+}
+
+
+void Random::append_own(std::string& out, std::mt19937& e) const
+{
 	if (!generators.size()) {
-		return "";
+		return;
 	}
 	std::uniform_real_distribution<double> distribution(0, generators.size() - 1);
-	int rnd = distribution(rng) + 0.5;
-	return generators[rnd]->toString();
+	int rnd = distribution(e) + 0.5;
+	append_output(*generators[rnd], out, e);
 }
 
 
@@ -331,6 +386,15 @@ Sequence::Sequence()
 Sequence::Sequence(std::vector<std::unique_ptr<Generator>>&& generators_) :
 	Generator(std::move(generators_))
 {
+}
+
+void Sequence::append(std::string& out, std::mt19937& e) const
+{
+	if (typeid(*this) == typeid(Sequence)) {
+		append_generators(out, e);
+	} else {
+		out += toString();
+	}
 }
 
 Literal::Literal(const std::string &value_) :
@@ -358,6 +422,15 @@ std::string Literal::toString() const
 	return value;
 }
 
+void Literal::append(std::string& out, std::mt19937&) const
+{
+	if (typeid(*this) == typeid(Literal)) {
+		out += value;
+	} else {
+		out += toString();
+	}
+}
+
 Reverser::Reverser(std::unique_ptr<Generator>&& g)
 {
 	add(std::move(g));
@@ -366,9 +439,27 @@ Reverser::Reverser(std::unique_ptr<Generator>&& g)
 
 std::string Reverser::toString() const
 {
-	std::wstring str = towstring(Generator::toString());
+	std::string str;
+	append_own(str, engine());
+	return str;
+}
+
+void Reverser::append(std::string& out, std::mt19937& e) const
+{
+	if (typeid(*this) == typeid(Reverser)) {
+		append_own(out, e);
+	} else {
+		out += toString();
+	}
+}
+
+void Reverser::append_own(std::string& out, std::mt19937& e) const
+{
+	std::string generated;
+	append_generators(generated, e);
+	std::wstring str = towstring(generated);
 	std::reverse(str.begin(), str.end());
-	return tostring(str);
+	out += tostring(str);
 }
 
 Capitalizer::Capitalizer(std::unique_ptr<Generator>&& g)
@@ -378,9 +469,27 @@ Capitalizer::Capitalizer(std::unique_ptr<Generator>&& g)
 
 std::string Capitalizer::toString() const
 {
-	std::wstring str = towstring(Generator::toString());
+	std::string str;
+	append_own(str, engine());
+	return str;
+}
+
+void Capitalizer::append(std::string& out, std::mt19937& e) const
+{
+	if (typeid(*this) == typeid(Capitalizer)) {
+		append_own(out, e);
+	} else {
+		out += toString();
+	}
+}
+
+void Capitalizer::append_own(std::string& out, std::mt19937& e) const
+{
+	std::string generated;
+	append_generators(generated, e);
+	std::wstring str = towstring(generated);
 	str[0] = std::towupper(str[0]);
-	return tostring(str);
+	out += tostring(str);
 }
 
 
@@ -391,8 +500,26 @@ Collapser::Collapser(std::unique_ptr<Generator>&& g)
 
 std::string Collapser::toString() const
 {
-	std::wstring str = towstring(Generator::toString());
-	std::wstring out;
+	std::string str;
+	append_own(str, engine());
+	return str;
+}
+
+void Collapser::append(std::string& out, std::mt19937& e) const
+{
+	if (typeid(*this) == typeid(Collapser)) {
+		append_own(out, e);
+	} else {
+		out += toString();
+	}
+}
+
+void Collapser::append_own(std::string& out, std::mt19937& e) const
+{
+	std::string generated;
+	append_generators(generated, e);
+	std::wstring str = towstring(generated);
+	std::wstring collapsed;
 	int cnt = 0;
 	wchar_t pch = L'\0';
 	for (auto ch : str) {
@@ -416,11 +543,11 @@ std::string Collapser::toString() const
 				mch = 1;
 		}
 		if (cnt < mch) {
-			out.push_back(ch);
+			collapsed.push_back(ch);
 		}
 		pch = ch;
 	}
-	return tostring(out);
+	out += tostring(collapsed);
 }
 
 

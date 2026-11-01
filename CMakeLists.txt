@@ -18,21 +18,21 @@ add_library(namegen::namegen ALIAS namegen)
 add_library(fantasyname ALIAS namegen)
 add_library(fantasyname::fantasyname ALIAS namegen)
 
-option(NAMEGEN_BUILD_BENCH "Build the benchmark (fetches the C port as a comparator)" OFF)
-option(NAMEGEN_FUZZ "Build the libFuzzer target (Clang)" OFF)
-
 # Only build the tests, demo and benchmark when this repo is the top-level project,
 # so consumers (e.g. via FetchContent) don't build them.
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   enable_testing()
 
-  # The tests use assert(); keep it live in every build type.
-  set(NAMEGEN_TEST_FLAGS -UNDEBUG)
-
   add_executable(namegen_test test/test.cc)
   target_link_libraries(namegen_test PRIVATE namegen)
-  target_compile_options(namegen_test PRIVATE ${NAMEGEN_TEST_FLAGS})
   add_test(NAME namegen COMMAND namegen_test)
+
+  # One generator shared by eight threads (run under ThreadSanitizer in CI), and
+  # seeded engines.
+  find_package(Threads REQUIRED)
+  add_executable(namegen_thread_test test/thread_test.cc)
+  target_link_libraries(namegen_thread_test PRIVATE namegen Threads::Threads)
+  add_test(NAME namegen_thread COMMAND namegen_thread_test)
 
   # A runnable tour of the library (not a test): ./build/namegen_demo [pattern [n]]
   add_executable(namegen_demo examples/demo.cc)
