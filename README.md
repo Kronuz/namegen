@@ -1,6 +1,6 @@
 # namegen
 
-Part of [Kronuz C++ Libraries](https://github.com/Kronuz/cpp-libraries), a collection of small, reusable C++ libraries.
+Part of [Kronuz C++ Libraries](https://github.com/Kronuz/cpp-libraries), a collection of small, reusable C++ libraries. Read its story in [Rolling for a Name](https://kronuz.github.io/blog/rolling-for-a-name/), a Familiars post.
 
 [![CI](https://github.com/Kronuz/namegen/actions/workflows/ci.yml/badge.svg)](https://github.com/Kronuz/namegen/actions/workflows/ci.yml)
 [![License: Unlicense](https://img.shields.io/badge/license-Unlicense-blue.svg)](UNLICENSE)
