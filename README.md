@@ -145,6 +145,8 @@ cmake -B bench -DCMAKE_BUILD_TYPE=Release -DNAMEGEN_BUILD_BENCH=ON && cmake --bu
 
 ## 📚 Documentation
 
+- [Rolling for a Name](https://kronuz.github.io/blog/rolling-for-a-name/):
+  the Familiars post on why it exists and how it works.
 - [docs/API.md](docs/API.md): the pattern syntax, the classes, engines and locales.
 - [ARCHITECTURE.md](ARCHITECTURE.md): the tree, the draw, the transforms and the tests.
 - [docs/perf/](docs/perf/README.md): every benchmark row, the original's numbers and the
